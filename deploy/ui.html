@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Qwen3.8-27B-FP8 · Chat</title>
+<style>
+  :root{
+    --bg:#0b0e13; --bg2:#10151d; --panel:#151c27; --panel2:#1a2230;
+    --line:#26303f; --line2:#334052; --txt:#e9eef5; --mut:#93a1b5; --mut2:#6b7889;
+    --acc:#4da3ff; --acc2:#2b7cd3; --green:#43d68a; --red:#ff7a7a; --amber:#ffc857;
+    --r:14px; --font:15px/1.6 -apple-system,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,#16233a 0%,var(--bg) 55%) fixed,var(--bg);color:var(--txt);font:var(--font)}
+  button{font:inherit;cursor:pointer}
+  #app{display:flex;height:100vh;height:100dvh}
+  /* ---------- sidebar ---------- */
+  #side{width:290px;min-width:290px;background:rgba(16,21,29,.92);border-right:1px solid var(--line);display:flex;flex-direction:column;backdrop-filter:blur(6px)}
+  #side .brand{padding:16px 16px 10px}
+  .brand h1{font-size:15px;margin:0;display:flex;align-items:center;gap:8px}
+  .brand h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--mut2)}
+  .brand h1 .dot.ok{background:var(--green);box-shadow:0 0 8px var(--green)}
+  .brand h1 .dot.bad{background:var(--red)}
+  .brand p{margin:6px 0 0;font-size:12px;color:var(--mut)}
+  #newchat{margin:4px 16px 10px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#06121f;border:0;border-radius:10px;padding:9px;font-weight:700}
+  #chats{flex:1;overflow-y:auto;padding:0 8px 8px}
+  .chatitem{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;color:var(--txt);border-radius:10px;padding:9px 10px;margin:2px 0}
+  .chatitem:hover{background:var(--panel)}
+  .chatitem.active{background:var(--panel2);border-color:var(--line2)}
+  .chatitem .t{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chatitem .m{font-size:11.5px;color:var(--mut)}
+  .chatitem .del{float:right;color:var(--mut2);background:none;border:0;font-size:14px;padding:0 2px}
+  .chatitem .del:hover{color:var(--red)}
+  #side .sec{border-top:1px solid var(--line);padding:12px 16px;font-size:12.5px;color:var(--mut)}
+  #side .sec b{color:var(--txt)}
+  #side .sec .k{color:var(--mut2)}
+  #sessstats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+  #sessstats div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+  #sessstats div span{display:block;font-size:11px;color:var(--mut2)}
+  #sessstats div b{font-size:14px}
+  .sidebtns{display:flex;gap:6px;margin-top:10px}
+  .sidebtns button{flex:1;background:var(--panel2);color:var(--txt);border:1px solid var(--line2);border-radius:8px;padding:7px;font-size:12.5px}
+  /* ---------- main ---------- */
+  #main{flex:1;display:flex;flex-direction:column;min-width:0}
+  #topbar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:rgba(16,21,29,.75);flex-wrap:wrap}
+  #menu{display:none;background:var(--panel2);color:var(--txt);border:1px solid var(--line2);border-radius:8px;padding:7px 10px}
+  #backend{flex:1;min-width:200px;background:#0b0f16;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px 10px;font-size:13px}
+  #model{max-width:230px;background:#0b0f16;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px;font-size:13px}
+  .pill{font-size:12px;border:1px solid var(--line2);border-radius:99px;padding:4px 11px;color:var(--mut);white-space:nowrap}
+  .pill.ok{color:var(--green);border-color:var(--green)}
+  .pill.bad{color:var(--red);border-color:var(--red)}
+  .pill.live{color:var(--txt);border-color:var(--acc)}
+  #log{flex:1;overflow-y:auto;padding:22px 16px 16px;scroll-behavior:smooth}
+  #loginner{max-width:860px;margin:0 auto}
+  .hero{text-align:center;padding:8vh 10px 4vh;color:var(--mut)}
+  .hero .logo{font-size:44px}
+  .hero h2{color:var(--txt);font-size:22px;margin:10px 0 4px}
+  .hero p{margin:0 0 16px;font-size:14px}
+  .sugs{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .sugs button{background:var(--panel);border:1px solid var(--line2);color:var(--txt);border-radius:99px;padding:8px 14px;font-size:13px}
+  .sugs button:hover{border-color:var(--acc)}
+  .msg{display:flex;gap:11px;margin:14px 0;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+  .ava{width:32px;height:32px;min-width:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;background:var(--panel2);border:1px solid var(--line2)}
+  .msg.user .ava{background:linear-gradient(135deg,var(--acc),var(--acc2));border:0}
+  .bubble{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:11px 14px;overflow-wrap:break-word}
+  .msg.user .bubble{background:#17273c;border-color:#2b4a73}
+  .bubble .meta{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mut2);margin-bottom:5px}
+  .bubble .meta .sp{flex:1}
+  .bubble .meta button{background:none;border:0;color:var(--mut2);font-size:12px;padding:2px 5px;border-radius:6px}
+  .bubble .meta button:hover{color:var(--txt);background:var(--panel2)}
+  .md{font-size:14.5px}
+  .md p{margin:.5em 0}.md p:first-child{margin-top:0}.md p:last-child{margin-bottom:0}
+  .md h1,.md h2,.md h3,.md h4{margin:.8em 0 .4em;line-height:1.3}
+  .md ul,.md ol{margin:.4em 0;padding-left:22px}
+  .md blockquote{border-left:3px solid var(--acc);margin:.5em 0;padding:2px 0 2px 12px;color:var(--mut)}
+  .md a{color:var(--acc)}
+  .md table{border-collapse:collapse;margin:.6em 0;font-size:13px;display:block;overflow-x:auto}
+  .md th,.md td{border:1px solid var(--line2);padding:5px 9px}
+  .md code{font-family:var(--mono);font-size:12.8px;background:#0b0f16;border:1px solid var(--line);border-radius:6px;padding:1px 5px}
+  .codeblock{margin:.6em 0;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+  .codeblock .ch{display:flex;align-items:center;background:#0b0f16;padding:6px 10px;font-size:12px;color:var(--mut);font-family:var(--mono)}
+  .codeblock .ch .sp{flex:1}
+  .codeblock .ch button{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:6px;font-size:11.5px;padding:3px 9px}
+  .codeblock pre{margin:0;padding:11px 12px;overflow-x:auto;background:#0d1219}
+  .codeblock pre code{background:none;border:0;padding:0;display:block;line-height:1.55}
+  details.think{margin:4px 0 8px;font-size:13px;color:var(--mut);background:#0d1219;border:1px dashed var(--line2);border-radius:9px;padding:7px 10px}
+  details.think summary{cursor:pointer;color:var(--amber)}
+  .mstats{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .mstats span{font-size:11px;color:var(--mut);background:#0d1219;border:1px solid var(--line);border-radius:99px;padding:2px 9px;font-family:var(--mono)}
+  .mstats span b{color:var(--acc)}
+  .typing::after{content:"▍";animation:blink 1s infinite;color:var(--acc)}
+  @keyframes blink{50%{opacity:0}}
+  .imgs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .imgs img{max-width:220px;max-height:160px;border-radius:10px;border:1px solid var(--line2)}
+  /* ---------- composer ---------- */
+  #composer{border-top:1px solid var(--line);background:rgba(16,21,29,.92);padding:12px 16px 14px}
+  #composer .inner{max-width:860px;margin:0 auto}
+  #opts{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:9px;font-size:12.5px;color:var(--mut)}
+  #opts label{display:flex;gap:5px;align-items:center}
+  #opts input[type=number],#opts select{background:#0b0f16;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:5px 7px;font-size:12.5px}
+  #opts .tgl{position:relative;display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  #sysrow{display:none;margin-bottom:9px}
+  #sysrow.open{display:block}
+  #sys{width:100%;background:#0b0f16;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px 10px;font:inherit;font-size:13px;resize:vertical;min-height:44px}
+  #attachprev{display:none;gap:8px;margin-bottom:9px;flex-wrap:wrap}
+  #attachprev img{max-height:90px;border-radius:8px;border:1px solid var(--line2)}
+  #attachprev button{background:var(--panel2);color:var(--txt);border:1px solid var(--line2);border-radius:8px;padding:4px 10px;font-size:12px;align-self:center}
+  #box{display:flex;gap:9px;align-items:flex-end}
+  #attach{background:var(--panel2);color:var(--txt);border:1px solid var(--line2);border-radius:10px;padding:0;width:44px;height:44px;font-size:19px}
+  #q{flex:1;background:#0b0f16;border:1px solid var(--line2);color:var(--txt);border-radius:11px;padding:11px 13px;font:inherit;font-size:14.5px;resize:none;min-height:44px;max-height:180px;line-height:1.5}
+  #q:focus{outline:none;border-color:var(--acc)}
+  #send{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#06121f;border:0;border-radius:11px;min-width:88px;height:44px;font-weight:700}
+  #send:disabled{opacity:.45}
+  #send.stop{background:var(--red);color:#2b0505}
+  #hint{font-size:11.5px;color:var(--mut2);margin-top:7px;text-align:center}
+  #toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:50}
+  .toast{background:#2a1215;border:1px solid var(--red);color:#ffd9d9;border-radius:10px;padding:9px 16px;font-size:13.5px;max-width:90vw}
+  @media (max-width:860px){
+    #side{position:fixed;left:0;top:0;bottom:0;z-index:20;transform:translateX(-100%);transition:transform .2s}
+    #side.open{transform:none;box-shadow:20px 0 60px rgba(0,0,0,.5)}
+    #menu{display:block}
+    #model{display:none}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="brand">
+      <h1><span class="dot" id="dot"></span> Qwen3.8-27B-FP8</h1>
+      <p>2× RTX 3090 · vLLM · 32k context</p>
+    </div>
+    <button id="newchat" type="button">+ New chat</button>
+    <div id="chats"></div>
+    <div class="sec">
+      <div><span class="k">model</span> · <b id="infomodel">Qwen3.8-27B-FP8</b></div>
+      <div><span class="k">session</span> · <b id="infomsgs">0</b> msgs · <b id="infotok">0</b> tok</div>
+      <div id="sessstats">
+        <div><span>avg tok/s</span><b id="stavg">–</b></div>
+        <div><span>last tok/s</span><b id="stlast">–</b></div>
+        <div><span>TTFT last</span><b id="stttft">–</b></div>
+        <div><span>total gen</span><b id="sttot">0</b></div>
+      </div>
+      <div class="sidebtns">
+        <button id="export" type="button">Export .md</button>
+        <button id="clearall" type="button">Clear all</button>
+      </div>
+    </div>
+  </aside>
+  <div id="main">
+    <div id="topbar">
+      <button id="menu" type="button">☰</button>
+      <input id="backend" type="text" value="" placeholder="https://<api-tunnel>/v1 or http://host:8000"/>
+      <select id="model"><option>Qwen3.8-27B-FP8</option></select>
+      <span class="pill" id="status">not checked</span>
+      <span class="pill live" id="live" style="display:none"></span>
+    </div>
+    <div id="log"><div id="loginner"></div></div>
+    <div id="composer"><div class="inner">
+      <div id="opts">
+        <label class="tgl"><input type="checkbox" id="thinking" checked/> thinking</label>
+        <label>effort
+          <select id="effort"><option value="xhigh" selected>xhigh</option><option value="medium">medium</option><option value="low">low</option></select>
+        </label>
+        <label>temp <input type="number" id="temp" value="1.0" step="0.1" min="0" max="2" style="width:58px"/></label>
+        <label>max <input type="number" id="maxtok" value="2048" step="128" min="16" max="32768" style="width:78px"/></label>
+        <label class="tgl"><input type="checkbox" id="usestream" checked/> stream</label>
+        <button id="sysbtn" type="button" style="background:none;border:1px solid var(--line2);color:var(--mut);border-radius:7px;padding:5px 10px;font-size:12px">system prompt</button>
+      </div>
+      <div id="sysrow"><textarea id="sys" placeholder="Optional system prompt…"></textarea></div>
+      <div id="attachprev"><img id="attachimg" alt=""/><button id="attachrm" type="button">remove</button></div>
+      <div id="box">
+        <input type="file" id="file" accept="image/*" style="display:none"/>
+        <button id="attach" type="button" title="Attach image">📎</button>
+        <textarea id="q" rows="1" placeholder="Ask anything…  (Enter to send · Shift+Enter newline)"></textarea>
+        <button id="send" type="button">Send</button>
+      </div>
+      <div id="hint">Streaming shows live tok/sec · TTFT · totals per message · session totals in sidebar</div>
+    </div></div>
+  </div>
+</div>
+<div id="toasts"></div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const MODEL_DEFAULT = "Qwen3.8-27B-FP8";
+const params = new URLSearchParams(location.search);
+
+// ---------- state ----------
+let chats = [], activeId = null, ctrl = null, imgData = null;
+let sessTok = 0, sessMsgs = 0, rates = [];
+try { chats = JSON.parse(localStorage.getItem("qwen_chats") || "[]"); } catch(e){ chats = []; }
+function save(){ try{ localStorage.setItem("qwen_chats", JSON.stringify(chats.slice(0,30))); }catch(e){} }
+function active(){ return chats.find(c => c.id === activeId); }
+function base(){ return ($("backend").value || "").replace(/\/+$/,""); }
+
+// ---------- backend default ----------
+(function(){
+  const q = params.get("api");
+  if (q) { $("backend").value = q.replace(/\/+$/,""); return; }
+  if (!$("backend").value) $("backend").value = location.protocol + "//" + location.hostname + ":8000";
+})();
+
+// ---------- markdown ----------
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function inline(s){
+  s = esc(s);
+  s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*\w])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return s;
+}
+function md(src){
+  const blocks = [];
+  src = src.replace(/```(\w*)\n([\s\S]*?)(```|$)/g, (m, lang, code) => {
+    blocks.push({lang: lang || "code", code: code.replace(/\n$/,"")});
+    return "\u0000" + (blocks.length - 1) + "\u0000";
+  });
+  const out = [];
+  const lines = src.split("\n");
+  let i = 0, list = null;
+  function flushList(){ if(list){ out.push(list.tag === "ul" ? "<ul>"+list.items.map(x=>"<li>"+inline(x)+"</li>").join("")+"</ul>" : "<ol>"+list.items.map(x=>"<li>"+inline(x)+"</li>").join("")+"</ol>"); list = null; } }
+  for (; i < lines.length; i++){
+    const ln = lines[i];
+    const ph = ln.match(/^\u0000(\d+)\u0000$/);
+    if (ph){ flushList(); const b = blocks[+ph[1]];
+      out.push('<div class="codeblock"><div class="ch"><span>'+esc(b.lang)+'</span><span class="sp"></span><button type="button" data-copy="'+ph[1]+'">copy</button></div><pre><code>'+esc(b.code)+'</code></pre></div>');
+      continue; }
+    const h = ln.match(/^(#{1,4})\s+(.*)/);
+    if (h){ flushList(); out.push("<h"+h[1].length+">"+inline(h[2])+"</h"+h[1].length+">"); continue; }
+    if (/^\s*&gt;/.test(inline(ln)) || ln.trim().startsWith(">")){ flushList(); out.push("<blockquote>"+inline(ln.replace(/^\s*>\s?/,""))+"</blockquote>"); continue; }
+    const ul = ln.match(/^\s*[-*]\s+(.*)/), ol = ln.match(/^\s*\d+[.)]\s+(.*)/);
+    if (ul){ if(!list || list.tag !== "ul"){ flushList(); list = {tag:"ul", items:[]}; } list.items.push(ul[1]); continue; }
+    if (ol){ if(!list || list.tag !== "ol"){ flushList(); list = {tag:"ol", items:[]}; } list.items.push(ol[1]); continue; }
+    if (/^\s*\|.*\|\s*$/.test(ln) && i+1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])){
+      flushList();
+      const heads = ln.split("|").map(x=>x.trim()).filter(Boolean);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){ rows.push(lines[i].split("|").map(x=>x.trim()).filter(Boolean)); i++; }
+      i--;
+      out.push("<table><tr>" + heads.map(x=>"<th>"+inline(x)+"</th>").join("") + "</tr>" +
+        rows.map(r=>"<tr>"+r.map(x=>"<td>"+inline(x)+"</td>").join("")+"</tr>").join("") + "</table>");
+      continue;
+    }
+    if (!ln.trim()){ flushList(); continue; }
+    flushList(); out.push("<p>"+inline(ln)+"</p>");
+  }
+  flushList();
+  window._codeblocks = blocks;
+  return out.join("\n");
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-copy]");
+  if (!b) return;
+  const code = (window._codeblocks[+b.dataset.copy] || {}).code || "";
+  navigator.clipboard.writeText(code).then(()=>{ b.textContent = "copied ✓"; setTimeout(()=>b.textContent="copy", 1500); });
+});
+
+// ---------- sidebar / sessions ----------
+function renderChats(){
+  const el = $("chats"); el.innerHTML = "";
+  if (!chats.length){ el.innerHTML = '<div style="padding:8px 10px;font-size:12.5px;color:var(--mut2)">No chats yet — start one.</div>'; return; }
+  chats.slice().reverse().forEach(c => {
+    const b = document.createElement("button");
+    b.className = "chatitem" + (c.id === activeId ? " active" : "");
+    b.innerHTML = "";
+    const del = document.createElement("span");
+    del.className = "del"; del.textContent = "×"; del.title = "delete";
+    del.onclick = ev => { ev.stopPropagation(); chats = chats.filter(x => x.id !== c.id); if (activeId === c.id) activeId = chats.length ? chats[chats.length-1].id : null; save(); renderChats(); renderActive(); };
+    const t = document.createElement("div"); t.className = "t"; t.textContent = c.title || "chat";
+    const m = document.createElement("div"); m.className = "m";
+    m.textContent = new Date(c.created).toLocaleString() + " · " + c.msgs.length + " msgs";
+    b.append(del, t, m);
+    b.onclick = () => { activeId = c.id; save(); renderChats(); renderActive(); };
+    el.append(b);
+  });
+}
+function newChat(){
+  const c = {id: "c" + Date.now().toString(36), title: "new chat", created: Date.now(), msgs: []};
+  chats.push(c); activeId = c.id; save(); renderChats(); renderActive();
+}
+function renderActive(){
+  const inner = $("loginner"); inner.innerHTML = "";
+  const c = active();
+  sessTok = 0; sessMsgs = 0; rates = [];
+  if (!c || !c.msgs.length){
+    inner.innerHTML = '<div class="hero"><div class="logo">✦</div><h2>How can I help?</h2><p>Qwen3.8-27B-FP8 · thinking model · text + images</p><div class="sugs">' +
+      ["Explain quantum entanglement simply","Write a Python merge-sort","Debug my JS: fetch() returns undefined","Plan a 3-day Tokyo itinerary"].map(s=>'<button type="button" data-sug="'+esc(s)+'">'+esc(s)+"</button>").join("") + "</div></div>";
+    inner.querySelectorAll("[data-sug]").forEach(b => b.onclick = () => { $("q").value = b.dataset.sug; $("q").focus(); });
+  } else {
+    c.msgs.forEach(m => paintMsg(m, false));
+    const last = c.msgs[c.msgs.length - 1];
+    if (last && last.stats){ sessTok = c.msgs.reduce((a,m)=>a+((m.stats&&m.stats.tok)||0),0); sessMsgs = c.msgs.length;
+      rates = c.msgs.filter(m=>m.stats&&m.stats.rate).map(m=>m.stats.rate); }
+  }
+  updateSess();
+  $("log").scrollTop = $("log").scrollHeight;
+}
+function updateSess(){
+  $("infomsgs").textContent = sessMsgs;
+  $("infotok").textContent = sessTok.toLocaleString();
+  $("sttot").textContent = sessTok.toLocaleString();
+  $("stavg").textContent = rates.length ? (rates.reduce((a,b)=>a+b,0)/rates.length).toFixed(1) : "–";
+}
+function paintMsg(m, animate){
+  const inner = $("loginner");
+  const hero = inner.querySelector(".hero"); if (hero) hero.remove();
+  const d = document.createElement("div");
+  d.className = "msg " + (m.role === "user" ? "user" : "");
+  if (animate) d.style.animation = "fade .25s ease";
+  const ava = document.createElement("div"); ava.className = "ava"; ava.textContent = m.role === "user" ? "🧑" : "✦";
+  const bub = document.createElement("div"); bub.className = "bubble";
+  const meta = document.createElement("div"); meta.className = "meta";
+  const who = document.createElement("span"); who.textContent = m.role === "user" ? "you" : (m.model || MODEL_DEFAULT);
+  const sp = document.createElement("span"); sp.className = "sp";
+  const cp = document.createElement("button"); cp.textContent = "copy"; cp.title = "copy message";
+  cp.onclick = () => { navigator.clipboard.writeText(m.content || ""); cp.textContent = "copied ✓"; setTimeout(()=>cp.textContent="copy",1200); };
+  meta.append(who, sp, cp);
+  if (m.role === "assistant"){
+    const rg = document.createElement("button"); rg.textContent = "↻ retry"; rg.title = "regenerate";
+    rg.onclick = () => regenerate(); meta.append(rg);
+  }
+  bub.append(meta);
+  if (m.images && m.images.length){
+    const im = document.createElement("div"); im.className = "imgs";
+    m.images.forEach(u => { const im2 = document.createElement("img"); im2.src = u; im.append(im2); });
+    bub.append(im);
+  }
+  if (m.reasoning){
+    const det = document.createElement("details"); det.className = "think";
+    const sum = document.createElement("summary"); sum.textContent = "💭 thinking (" + m.reasoning.length + " chars)";
+    const div = document.createElement("div"); div.textContent = m.reasoning;
+    det.append(sum, div); bub.append(det);
+  }
+  const body = document.createElement("div"); body.className = "md";
+  body.innerHTML = m.role === "user" ? esc(m.content).replace(/\n/g,"<br>") : md(m.content || "");
+  bub.append(body);
+  if (m.stats){
+    const st = document.createElement("div"); st.className = "mstats";
+    st.innerHTML = "<span><b>" + m.stats.rate.toFixed(1) + "</b> tok/s</span><span>" + m.stats.tok + " tok</span><span>TTFT " + m.stats.ttft.toFixed(2) + "s</span><span>" + m.stats.el.toFixed(1) + "s</span>";
+    bub.append(st);
+  }
+  d.append(ava, bub);
+  inner.append(d);
+  $("log").scrollTop = $("log").scrollHeight;
+  return {bubble: bub, body: body};
+}
+
+// ---------- status / models ----------
+async function ping(silent){
+  const st = $("status"), dot = $("dot");
+  if (!silent){ st.textContent = "checking…"; st.className = "pill"; }
+  try{
+    const r = await fetch(base() + "/v1/models");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const ids = (j.data || []).map(m => m.id);
+    const sel = $("model"); sel.innerHTML = "";
+    ids.forEach(id => { const o = document.createElement("option"); o.textContent = id; sel.append(o); });
+    if (!ids.includes(MODEL_DEFAULT) && ids.length) $("infomodel").textContent = ids[0];
+    st.textContent = "API ok · " + ids.length + " model" + (ids.length === 1 ? "" : "s");
+    st.className = "pill ok"; dot.className = "dot ok";
+    return true;
+  }catch(e){
+    if (!silent){ st.textContent = "unreachable — check backend URL"; st.className = "pill bad"; dot.className = "dot bad"; }
+    return false;
+  }
+}
+
+// ---------- images ----------
+$("attach").onclick = () => $("file").click();
+$("file").onchange = () => {
+  const f = $("file").files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1568;
+      let w = img.width, h = img.height;
+      const s = Math.min(1, MAX / Math.max(w, h));
+      w = Math.round(w * s); h = Math.round(h * s);
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      imgData = cv.toDataURL("image/jpeg", 0.85);
+      $("attachimg").src = imgData;
+      $("attachprev").style.display = "flex";
+    };
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(f);
+  $("file").value = "";
+};
+$("attachrm").onclick = () => { imgData = null; $("attachprev").style.display = "none"; };
+
+// ---------- send / stream ----------
+function toast(msg){
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+  $("toasts").append(t); setTimeout(()=>t.remove(), 6000);
+}
+function setBusy(busy){
+  $("send").disabled = false;
+  $("send").textContent = busy ? "Stop" : "Send";
+  $("send").classList.toggle("stop", busy);
+}
+$("send").onclick = () => { if (ctrl) ctrl.abort(); else send(); };
+function live(txt){ const l = $("live"); l.style.display = ""; l.textContent = txt; }
+function liveHide(){ $("live").style.display = "none"; }
+
+async function send(){
+  const text = $("q").value.trim();
+  if ((!text && !imgData) || ctrl) return;
+  if (!await ping(true)){ toast("API unreachable — check the backend URL at the top."); }
+  let c = active();
+  if (!c){ newChat(); c = active(); }
+  const imgs = imgData ? [imgData] : [];
+  const umsg = {role: "user", content: text || "(image)", images: imgs};
+  c.msgs.push(umsg); paintMsg(umsg, true);
+  if (c.msgs.length <= 2) c.title = (text || "image chat").slice(0, 48);
+  $("q").value = ""; $("q").style.height = "auto";
+  imgData = null; $("attachprev").style.display = "none";
+  save(); renderChats();
+
+  const model = $("model").value || MODEL_DEFAULT;
+  const thinking = $("thinking").checked;
+  const effort = $("effort").value;
+  const stream = $("usestream").checked;
+  const content = imgs.length
+    ? [{type: "text", text: text || "Describe this image."}, ...imgs.map(u => ({type: "image_url", image_url: {url: u}}))]
+    : text;
+  const history = [];
+  if ($("sys").value.trim()) history.push({role: "system", content: $("sys").value.trim()});
+  c.msgs.forEach(m => history.push({role: m.role, content: m.role === "user" && m.images && m.images.length && m.content !== "(image)" ? m.content : m.content}));
+
+  const amsg = {role: "assistant", content: "", reasoning: "", model: model, stats: null};
+  const refs = paintMsg(amsg, true);
+  const thinkDet = document.createElement("details"); thinkDet.className = "think"; thinkDet.style.display = "none";
+  thinkDet.innerHTML = "<summary>💭 thinking…</summary><div></div>";
+  refs.body.before(thinkDet);
+  const thinkDiv = thinkDet.querySelector("div");
+  refs.body.classList.add("typing");
+
+  ctrl = new AbortController();
+  setBusy(true);
+  live("connecting…");
+  const t0 = performance.now();
+  let tFirst = 0, acc = "", accR = "", usage = null;
+  try{
+    const resp = await fetch(base() + "/v1/chat/completions", {
+      method: "POST", signal: ctrl.signal,
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        model, messages: history,
+        temperature: parseFloat($("temp").value || "0"),
+        max_tokens: parseInt($("maxtok").value || "2048", 10),
+        stream: stream, stream_options: stream ? {include_usage: true} : undefined,
+        reasoning_effort: thinking ? effort : undefined,
+        extra_body: {chat_template_kwargs: {enable_thinking: thinking}}
+      })
+    });
+    if (!resp.ok){ let t = ""; try{ t = await resp.text(); }catch(e){} throw new Error("HTTP " + resp.status + " " + t.slice(0, 200)); }
+    if (!stream){
+      const j = await resp.json();
+      const ch = (j.choices && j.choices[0] && j.choices[0].message) || {};
+      acc = ch.content || ""; accR = ch.reasoning_content || ch.reasoning || "";
+      usage = j.usage || null; tFirst = performance.now();
+    } else {
+      const reader = resp.body.getReader(), dec = new TextDecoder();
+      let buf = "";
+      for(;;){
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, {stream: true});
+        const parts = buf.split("\n\n"); buf = parts.pop();
+        for (const p of parts){
+          const line = p.trim();
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (data === "[DONE]") continue;
+          let j; try{ j = JSON.parse(data); }catch(e){ continue; }
+          if (j.usage) usage = j.usage;
+          const d = (j.choices && j.choices[0] && j.choices[0].delta) || {};
+          if (!tFirst && (d.content || d.reasoning_content || d.reasoning)) tFirst = performance.now();
+          const th = d.reasoning_content || d.reasoning || "";
+          if (th){ accR += th; thinkDet.style.display = ""; thinkDiv.textContent = accR.slice(-4000); }
+          if (d.content){ acc += d.content; refs.body.textContent = acc; }
+          const el = (performance.now() - t0) / 1000;
+          const est = usage && usage.completion_tokens ? usage.completion_tokens : Math.max(1, Math.round((acc.length + accR.length) / 4));
+          live("⚡ " + (est / Math.max(el, .01)).toFixed(1) + " tok/s · " + el.toFixed(1) + "s");
+        }
+        $("log").scrollTop = $("log").scrollHeight;
+      }
+    }
+  }catch(e){
+    if (e.name !== "AbortError"){ toast("Request failed: " + e.message); acc += "\n\n[error: " + e.message + "]"; }
+    else acc += "\n\n[stopped]";
+  }finally{
+    ctrl = null; setBusy(false); liveHide();
+  }
+  // Some builds leak thinking into content with a trailing </think> — split it out.
+  if (!accR && /<\/think>/.test(acc)){
+    const parts = acc.split(/<\/think>/);
+    accR = parts[0].replace(/^[\s\S]*?<think>\n?/, "").trim();
+    acc = parts.slice(1).join("</think>").trim();
+  }
+  const el = (performance.now() - t0) / 1000;
+  const tok = usage && usage.completion_tokens != null ? usage.completion_tokens : Math.max(1, Math.round((acc.length + accR.length) / 4));
+  amsg.content = acc; amsg.reasoning = accR;
+  amsg.stats = {tok: tok, rate: tok / Math.max(el, .01), ttft: tFirst ? (tFirst - t0) / 1000 : el, el: el};
+  c.msgs.push(amsg);
+  sessTok += tok; sessMsgs += 2; rates.push(amsg.stats.rate);
+  $("stlast").textContent = amsg.stats.rate.toFixed(1);
+  $("stttft").textContent = amsg.stats.ttft.toFixed(2) + "s";
+  updateSess(); save(); renderChats();
+  renderActive();
+}
+async function regenerate(){
+  const c = active(); if (!c || ctrl) return;
+  let i = c.msgs.length - 1;
+  while (i >= 0 && c.msgs[i].role !== "user") i--;
+  if (i < 0) return;
+  c.msgs = c.msgs.slice(0, i);
+  const last = c.msgs.pop();
+  save(); renderActive();
+  $("q").value = last.content === "(image)" ? "" : last.content;
+  imgData = (last.images && last.images[0]) || null;
+  if (imgData){ $("attachimg").src = imgData; $("attachprev").style.display = "flex"; }
+  send();
+}
+
+// ---------- composer events ----------
+const q = $("q");
+q.addEventListener("input", () => { q.style.height = "auto"; q.style.height = Math.min(180, q.scrollHeight) + "px"; });
+q.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); send(); } });
+$("sysbtn").onclick = () => $("sysrow").classList.toggle("open");
+$("newchat").onclick = newChat;
+$("menu").onclick = () => $("side").classList.toggle("open");
+$("export").onclick = () => {
+  const c = active(); if (!c) return;
+  let out = "# " + (c.title || "chat") + "\n\n";
+  c.msgs.forEach(m => { out += (m.role === "user" ? "## You" : "## Assistant") + "\n\n" + (m.content || "") + "\n\n";
+    if (m.stats) out += "_" + m.stats.tok + " tok · " + m.stats.rate.toFixed(1) + " tok/s · TTFT " + m.stats.ttft.toFixed(2) + "s_\n\n"; });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([out], {type: "text/markdown"}));
+  a.download = "chat-" + c.id + ".md"; a.click();
+};
+$("clearall").onclick = () => { if (confirm("Delete all chats?")){ chats = []; activeId = null; save(); renderChats(); renderActive(); } };
+$("backend").addEventListener("change", () => ping(true));
+
+// ---------- init ----------
+if (!chats.length) newChat();
+else { activeId = chats[chats.length - 1].id; }
+renderChats(); renderActive(); ping(false);
+setInterval(() => ping(true), 60000);
+</script>
+</body>
+</html>

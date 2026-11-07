@@ -1,0 +1,22 @@
+# Runtime / secrets — never commit these
+*.log
+*.pid
+tunnel-*.log
+ui.log
+*.tmp
+
+# Local caches (recreated by deploy.sh)
+/hf-cache/
+/vllm-cache/
+
+# Future benchmark runs — keep the checked-in example only
+bench/results/results-*.json
+!bench/results/results-2026-11-01.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*~
+*.swp
+.idea/
+.vscode/
